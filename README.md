@@ -2,7 +2,7 @@
 GOAL: Identifying infections in CT scan images of COVID19 patients using CNNs
 
 ## 1. Total number of loans per states
-![Sample CT Scan Segmented](https://github.com/Mahmood-Hoseini/Lending-Club-Risk-Analysis-and-Gradient-Boosting/blob/master/total-loans-US-map.png)
+![Sample CT Scan Segmented](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/sample%20ct%20scan.png)
 
 
 ## About this dataset
