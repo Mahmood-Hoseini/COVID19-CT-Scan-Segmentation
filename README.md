@@ -17,3 +17,5 @@ This dataset contains 20 CT scans of patients diagnosed with COVID-19 as well as
 
 [2] - Glick, Y., 2020. Viewing Playlist: COVID-19 Pneumonia | Radiopaedia.Org. [online] Radiopaedia.org.
 
+[3] - https://www.kaggle.com/andrewmvd/covid19-ct-scans
+
