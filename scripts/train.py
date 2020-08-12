@@ -60,11 +60,7 @@ def select_metrics(metrics_name):
     return metrics[metrics_name]
 
 
-def train_now():
-    logging.basicConfig(level=logging.INFO)
-
-    args = opts.parse_arguments()
-
+def train_now(args):
     logging.info("Loading dataset...")
     augmentation_args = {
         'height_shift_range': args.height_shift_range,
@@ -177,4 +173,6 @@ def train_now():
     model_.save(os.path.join(args.outdir, args.outfile))
 
 if __name__ == '__main__':
-    train_now()
+    logging.basicConfig(level=logging.INFO)
+    args = opts.parse_arguments()
+    train_now(args)
