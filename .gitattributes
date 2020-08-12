@@ -1,2 +1,4 @@
 preprocessed_cts.cp filter=lfs diff=lfs merge=lfs -text
 augmented_cts.cp filter=lfs diff=lfs merge=lfs -text
+*.hdf5 filter=lfs diff=lfs merge=lfs -text
+*.nii filter=lfs diff=lfs merge=lfs -text
