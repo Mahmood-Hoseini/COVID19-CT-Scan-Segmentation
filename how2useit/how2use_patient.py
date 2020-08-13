@@ -53,7 +53,7 @@ def test_write_video(patient_obj):
     patient_obj.write_video(path)
 
 
-fpath = "../test-assets/patient00/"
+fpath = "../testing-set/patient00/"
 patient_obj = test_patient_data(fpath)
 plot_and_save(patient_obj)
 test_write_video(patient_obj)
