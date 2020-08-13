@@ -22,7 +22,7 @@ For the model and results, please check [here](https://chuckyee.github.io/cardia
 
 ## Installation
 
-The package is written in Python and can be installed using `python setup.py install` or `pip install .`
+The package is written in Python and can be installed using ```bash python setup.py install``` or ```bash pip install .```
 
 ## About this dataset
 CT scans plays a supportive role in the diagnosis of COVID-19 and is a key procedure for determining the severity that the patient finds himself in.
