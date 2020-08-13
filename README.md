@@ -1,6 +1,6 @@
 # COVID19 CT Scan Segmentation
 
-![build status](https://travis-ci.org/chuckyee/cardiac-segmentation.svg?branch=master)
+![build status]()
 
 ## GOAL: Identifying infections in CT scan images of COVID19 patients using CNNs
 
