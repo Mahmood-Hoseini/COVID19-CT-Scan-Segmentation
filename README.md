@@ -6,9 +6,9 @@
 
 COVID-19 patients usually develop pneumonia which rapidly progress to respiratory failure. Computed Tomography (CT) scan images play a supporative role in rapid diagnosis and the severity of the disease. This repository contains a package to identify lungs infections in CT scan images. 
 
-For problem description and accessing raw dataset, please check ![this](https://www.kaggle.com/andrewmvd/covid19-ct-scans)
+For problem description and accessing raw dataset, please check [this](https://www.kaggle.com/andrewmvd/covid19-ct-scans)
 
-For the model and results, please check ![here](https://chuckyee.github.io/cardiac-segmentation/).
+For the model and results, please check [here](https://chuckyee.github.io/cardiac-segmentation/).
 
 ![Sample CT Scan Segmented](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/ct-scan_sample-images.png)
 
