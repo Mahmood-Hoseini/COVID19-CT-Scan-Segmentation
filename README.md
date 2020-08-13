@@ -20,6 +20,9 @@ For the model and results, please check [here](https://chuckyee.github.io/cardia
 
 ![Sample CT Scan Segmented](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/ct-scan_sample-images.png)
 
+## Installation
+
+The package is written in Python and can be installed using `python setup.py install` or `pip install .`
 
 ## About this dataset
 CT scans plays a supportive role in the diagnosis of COVID-19 and is a key procedure for determining the severity that the patient finds himself in.
