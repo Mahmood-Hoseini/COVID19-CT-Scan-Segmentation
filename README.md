@@ -1,7 +1,9 @@
 # COVID19 CT Scan Segmentation
 
-[![made-with-python](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/)						
-[![build status](https://img.shields.io/badge/build-processing-green.svg)](https://shields.io/)
+[![made-with-python](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/)
+
+[![build status](https://img.shields.io/badge/build-passing-green.svg)]
+[![version](https://img.shields.io/badge/tensorflow-v1.15.0-yellow.svg)]()
 
 ## GOAL: Identifying infections in CT scan images of COVID19 patients using CNNs
 
