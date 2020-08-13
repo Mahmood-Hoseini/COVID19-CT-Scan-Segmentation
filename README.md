@@ -3,10 +3,10 @@
 [![build status](https://img.shields.io/badge/build-passing-green.svg)]()
 
 [![build status](https://img.shields.io/badge/made%20with-python-cyan.svg)](https://www.python.org/)
-[![version](https://img.shields.io/badge/tensorflow-v1.15.0-yellow.svg)](https://github.com/tensorflow/tensorflow/releases)
-[![build status](https://img.shields.io/badge/opencv-v4.2.0.34-red.svg)](https://pypi.org/project/opencv-python/)
-[![version](https://img.shields.io/badge/nibabel-v2.3.2-cyan.svg)](https://nipy.org/nibabel/)
-[![version](https://img.shields.io/badge/keras-2.3.1-green.svg)](https://pypi.org/project/Keras/)
+[![version](https://img.shields.io/badge/tensorflow-v1.15.0-gold.svg)](https://github.com/tensorflow/tensorflow/releases)
+[![build status](https://img.shields.io/badge/opencv-v4.2.0.34-gold.svg)](https://pypi.org/project/opencv-python/)
+[![version](https://img.shields.io/badge/nibabel-v2.3.2-gold.svg)](https://nipy.org/nibabel/)
+[![version](https://img.shields.io/badge/keras-2.3.1-gold.svg)](https://pypi.org/project/Keras/)
 
 
 
