@@ -46,7 +46,7 @@ This dataset contains images from 20 patients (divided into 19 training and 1 te
 
 ## Acknowledgements
 
-[1] - Paiva, O., 2020. CORONACASES.ORG - Helping Radiologists To Help People In More Than 100 Countries! Coronavirus Cases. Coronacases.org.
+[1] - Paiva, O., 2020. CORONACASES.ORG - Helping Radiologists To Help People In More Than 100 Countries! Coronavirus Cases. See [here](https://coronacases.org/)
 
 [2] - Glick, Y., 2020. Viewing Playlist: COVID-19 Pneumonia. Radiopaedia.Org. Available [here](https://radiopaedia.org/playlists/25887)
 
