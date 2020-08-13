@@ -2,8 +2,13 @@
 
 [![made-with-python](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/)
 
-[![build status](https://img.shields.io/badge/build-passing-green.svg)]
-[![version](https://img.shields.io/badge/tensorflow-v1.15.0-yellow.svg)]()
+[![build status](https://img.shields.io/badge/build-passing-green.svg)]()
+[![version](https://img.shields.io/badge/tensorflow-v1.15.0-yellow.svg)](https://github.com/tensorflow/tensorflow/releases)
+[![build status](https://img.shields.io/badge/opencv-v4.2.0.34-red.svg)](https://pypi.org/project/opencv-python/)
+[![version](https://img.shields.io/badge/nibabel-v2.3.2-cyan.svg)](https://nipy.org/nibabel/)
+[![version](https://img.shields.io/badge/keras-2.3.1-green.svg)](https://pypi.org/project/Keras/)
+
+
 
 ## GOAL: Identifying infections in CT scan images of COVID19 patients using CNNs
 
