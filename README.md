@@ -33,6 +33,7 @@ patient_data = patient.PatientData("testing-set/patient00")
 
 ![Sample Lung Mask](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/make-lungmask.png)
 
+
 Model is a convolutional neural network with one input (CT images) and two outputs (segmented lungs and infections) (see ```ctseg/models/convnet.py ```). Model is trained and the outputs, including weights, are saved in the ```outputs``` folder. To explore the model performance see ```scripts/evaluate.py```
 
 To test the model on new patient data, fill out `testdir` in the `defaults.config` file and run
@@ -40,6 +41,8 @@ To test the model on new patient data, fill out `testdir` in the `defaults.confi
 ```bash
 python -u scripts/run_on_test_patients.py defaults.config
 ```
+
+![Sample predicted output](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/actualvs.pred-patient00-frame047.png)
 
 
 ## About this dataset
