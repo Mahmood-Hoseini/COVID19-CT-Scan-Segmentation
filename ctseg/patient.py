@@ -1,11 +1,17 @@
 from __future__ import division, print_function
 
-import os, glob, re, tqdm
+import os, glob, re, tqdm, re
 import nibabel as nib
 import numpy as np
-import re
+import matplotlib.pylab as plt
+import matplotlib.animation as anim
 from PIL import Image, ImageDraw
 import cv2 as cv
+from sklearn.cluster import KMeans
+from skimage import morphology
+from skimage import measure
+
+from ctseg import opts
 
 clahe = cv.createCLAHE(clipLimit=3.0)
 
@@ -30,72 +36,103 @@ def clahe_enhancer(img, clahe, axes):
         
     return(clahe_img)
 
-def get_contours(img):
-    img = np.uint8(img*255)
-    
-    kernel = np.ones((3,3),np.float32)/9
-    img = cv.filter2D(img, -1, kernel)
-    
-    ret, thresh = cv.threshold(img, 50, 255, cv.THRESH_BINARY)
-    contours, hierarchy = cv.findContours(thresh, 2, 1)
-    #Areas = [cv.contourArea(cc) for cc in contours]; print(Areas)
-    
-    # filter contours that are too large or small
-    size = get_size(img)
-    contours = [cc for cc in contours if contourOK(cc, size)]
-    return contours
-
-def get_size(img):
-    ih, iw = img.shape
-    return iw * ih
-
-def contourOK(cc, size):
-    x, y, w, h = cv.boundingRect(cc)
-    if ((w < 50 and h > 150) or (w > 150 and h < 50)) : 
-        return False # too narrow or wide is bad
-    area = cv.contourArea(cc)
-    return area < (size * 0.5) and area > 200
-
-def find_boundaries(img, contours):
-    # margin is the minimum distance from the edges of the image, as a fraction
-    ih, iw = img.shape
-    minx = iw
-    miny = ih
-    maxx = 0
-    maxy = 0
-
-    for cc in contours:
-        x, y, w, h = cv.boundingRect(cc)
-        if x < minx: minx = x
-        if y < miny: miny = y
-        if x + w > maxx: maxx = x + w
-        if y + h > maxy: maxy = y + h
-
-    return (minx, miny, maxx, maxy)
-
 def crop_(img, boundaries):
     minx, miny, maxx, maxy = boundaries
-    return img[miny:maxy, minx:maxx]
+    return img[minx:maxx, miny:maxy]
     
-def crop_img(img, axes) :
-    contours = get_contours(img)
-    #plt.figure() # uncomment to troubleshoot
-    #canvas = np.zeros_like(img)
-    #cv.drawContours(canvas , contours, -1, (255, 255, 0), 1)
-    #plt.imshow(canvas)
-    bounds = find_boundaries(img, contours)
-    cropped_img = crop_(img, bounds)
+def make_lungmask(img, img_size=512, display_flag=False):
+    height, width = img.shape
+    img = (img-np.mean(img))/np.std(img)
 
-    if len(axes) > 0 :
-        axes[0].imshow(img, cmap='bone')
-        axes[0].set_title("Original CT scan")
-        axes[0].set_xticks([]); axes[0].set_yticks([])
-        
-        axes[1].imshow(cropped_img, cmap='bone')
-        axes[1].set_title("Cropped CT scan")
-        axes[1].set_xticks([]); axes[1].set_yticks([])
-        
-    return cropped_img, bounds
+    middle = img[int(width/5):int(width/5*4),int(height/5):int(height/5*4)] 
+    mean = np.mean(middle)  
+    imgmax = np.max(img)
+    imgmin = np.min(img)
+    
+    # To improve threshold finding, I'm moving the 
+    # underflow and overflow on the pixel spectrum
+    img[img==imgmax]=mean
+    img[img==imgmin]=mean
+    
+    # Using Kmeans to separate foreground (soft tissue / bone) and background (lung/air)
+    kmeans = KMeans(n_clusters=2).fit(np.reshape(middle,[np.prod(middle.shape),1]))
+    centers = sorted(kmeans.cluster_centers_.flatten())
+    threshold = np.mean(centers)
+    thresh_img = np.where(img<threshold,1.0,0.0)  # threshold the image
+
+    # First erode away the finer elements, then dilate to include some of the pixels surrounding the lung.  
+    # We don't want to accidentally clip the lung.
+    eroded = morphology.erosion(thresh_img,np.ones([3,3]))
+    dilation = morphology.dilation(eroded,np.ones([8,8]))
+
+    labels = measure.label(dilation) # Different labels are displayed in different colors
+    label_vals = np.unique(labels)
+    regions = measure.regionprops(labels)
+    try :
+        Lung1 = regions[1].bbox
+        Lung2 = regions[2].bbox
+        bounds = [min(Lung1[0], Lung2[0]), min(Lung1[1], Lung2[1]),
+                  max(Lung1[2], Lung2[2]), max(Lung1[3], Lung2[3])]
+    except :
+        bounds = [img_size, img_size, 0, 0]
+
+    if display_flag:
+        fig, ax = plt.subplots(1, 5, figsize=[15, 3])
+        ax[0].set_title("Original CT")
+        ax[0].imshow(img, cmap='bone')
+        ax[0].axis('off')
+        ax[1].set_title("Threshold")
+        ax[1].imshow(thresh_img, cmap='bone')
+        ax[1].axis('off')
+        ax[2].set_title("After Erosion & Dilation")
+        ax[2].imshow(dilation, cmap='bone')
+        ax[2].axis('off')
+        ax[3].set_title("Colored labels")
+        ax[3].imshow(labels)
+        ax[3].axis('off')
+        ax[4].set_title("Cropped CT")
+        ax[4].imshow(crop_(img, bounds), cmap='bone')
+        ax[4].axis('off')
+        plt.show()
+
+    return bounds
+
+
+def load_single_image(fname, bounds=[], img_size=512) :
+    img = nib.load(fname)
+    height, width, slices = img.shape
+    arr_img = img.get_fdata()
+    arr_img = np.rot90(np.array(arr_img))
+
+    # truncate frist and last 20% of the slices
+    arr_img = np.reshape(np.rollaxis(arr_img, 2), (slices, height, width, 1))
+    sel_slices = range(round(slices*0.2), round(slices*0.8))
+    arr_img = arr_img[sel_slices, :, :]
+
+    ## computing boundaries
+    if 'ctscan' in fname :
+        print('Determining boundaries...')
+        for ii in range(arr_img.shape[0]):
+            img = cv.resize(arr_img[ii], dsize=(img_size, img_size), 
+                                interpolation=cv.INTER_AREA)
+            B = make_lungmask(img, img_size=img_size, display_flag=False)
+            bounds[0] = min(bounds[0], B[0])
+            bounds[1] = min(bounds[1], B[1])
+            bounds[2] = max(bounds[2], B[2])
+            bounds[3] = max(bounds[3], B[3])
+
+    img_all = []
+    for ii in range(arr_img.shape[0]):
+        img = cv.resize(arr_img[ii], dsize=(img_size, img_size), 
+                                interpolation=cv.INTER_AREA)
+        if 'ctscan' in fname :
+            cropped_img = crop_(img, bounds)
+            img_all.append(cropped_img/255)
+        else :
+            cropped_img = crop_(img, bounds)
+            img_all.append(cropped_img)
+
+    return img_all, bounds
 
 
 class PatientData(object):
@@ -118,68 +155,30 @@ class PatientData(object):
         self.ctscan_file = files[0]
         self.lung_mask_file = files[0].replace('-ctscan', '-lung_mask')
         self.infection_mask_file = files[0].replace('-ctscan', '-infection_mask')
-        self.patient_id = int(re.findall(r"patient\d\d/", self.ctscan_file)[0][-3:-1])
 
         # load all data
         self.load_images()
 
 
+    @property
+    def patient_id(self) :
+        return int(re.findall(r"patient\d\d/", self.ctscan_file)[0][-3:-1])
+
+
     def load_images(self):
-        cts = nib.load(self.ctscan_file)
-        lungs = nib.load(self.lung_mask_file)
-        infec = nib.load(self.infection_mask_file)
-    
-        slices = cts.shape[2]
-
-        arr_cts = cts.get_fdata()
-        arr_lungs = lungs.get_fdata()
-        arr_infec = infec.get_fdata()
-
-        arr_cts = np.rot90(np.array(arr_cts))
-        arr_lungs = np.rot90(np.array(arr_lungs))
-        arr_infec = np.rot90(np.array(arr_infec))
-
-        # truncate frist and last 20% of the slices
-        arr_cts = arr_cts[:, :, round(slices*0.2):round(slices*0.8)]
-        arr_lungs = arr_lungs[:, :, round(slices*0.2):round(slices*0.8)]
-        arr_infec = arr_infec[:, :, round(slices*0.2):round(slices*0.8)]
-
-        arr_cts = np.reshape(np.rollaxis(arr_cts, 2), 
-                        (arr_cts.shape[2],arr_cts.shape[0],arr_cts.shape[1], 1))
-        arr_lungs = np.reshape(np.rollaxis(arr_lungs, 2), 
-                        (arr_lungs.shape[2],arr_lungs.shape[0],arr_lungs.shape[1], 1))
-        arr_infec = np.reshape(np.rollaxis(arr_infec, 2), 
-                        (arr_infec.shape[2],arr_infec.shape[0],arr_infec.shape[1], 1))
-
-        
-        cts_all = []
-        lungs_all = []
-        infects_all = []
-        max_w, max_h = 0, 0 #max width and height
-
+        ## Resizing to make images smaller
+        num_pix = 100
+            
         # img_size is the preferred image size to which the image is to be resized
         img_size = 512
 
-        for ii in range(arr_cts.shape[0]):
-            img_lungs = cv.resize(arr_lungs[ii], dsize=(img_size, img_size), interpolation=cv.INTER_AREA)
-            xmax, xmin = img_lungs.max(), img_lungs.min()
-            img_lungs = (img_lungs - xmin)/(xmax - xmin)
-            cropped_lungs, bounds = crop_img(img_lungs, [])
-            lungs_all.append(cropped_lungs)
-        
-            h, w = cropped_lungs.shape
-            max_h, max_w = max(max_h, h), max(max_w, w)
+        cts_all, bounds = load_single_image(self.ctscan_file, bounds=[img_size, img_size, 0, 0])
 
-            img_ct = cv.resize(arr_cts[ii], dsize=(img_size, img_size), interpolation=cv.INTER_AREA)
-            xmax, xmin = img_ct.max(), img_ct.min()
-            img_ct = (img_ct - xmin)/(xmax - xmin)
-            clahe_ct = clahe_enhancer(img_ct, clahe, [])
-            cropped_ct = crop_(clahe_ct, bounds)
-            cts_all.append(cropped_ct)
+        if os.path.isfile(self.lung_mask_file) :
+            lungs_all, bounds = load_single_image(self.lung_mask_file, bounds=bounds)
 
-            img_infec = cv.resize(arr_infec[ii], dsize=(img_size, img_size), interpolation=cv.INTER_AREA)
-            cropped_infec = crop_(img_infec, bounds)
-            infects_all.append(cropped_infec)
+        if os.path.isfile(self.infection_mask_file) :
+            infects_all, bounds = load_single_image(self.infection_mask_file, bounds=bounds)
 
         ## Resizing to make images smaller
         num_pix = 100
@@ -187,30 +186,78 @@ class PatientData(object):
         print('Loading images...')
         for ii in tqdm.tqdm(range(len(cts_all))) :
             try :
-                cts_all[ii] = cv.resize(cts_all[ii], dsize=(num_pix, num_pix), interpolation=cv.INTER_AREA)
+                cts_all[ii] = cv.resize(cts_all[ii], dsize=(num_pix, num_pix), 
+                                            interpolation=cv.INTER_AREA)
                 cts_all[ii] = np.reshape(cts_all[ii], (num_pix, num_pix, 1))
 
-                lungs_all[ii] = cv.resize(lungs_all[ii], dsize=(num_pix, num_pix), interpolation=cv.INTER_AREA)
-                lungs_all[ii] = np.reshape(lungs_all[ii], (num_pix, num_pix, 1))
+                if os.path.isfile(self.lung_mask_file) :
+                    lungs_all[ii] = cv.resize(lungs_all[ii], dsize=(num_pix, num_pix), 
+                                                interpolation=cv.INTER_AREA)
+                    lungs_all[ii] = np.reshape(lungs_all[ii], (num_pix, num_pix, 1))
 
-                infects_all[ii] = cv.resize(infects_all[ii], dsize=(num_pix, num_pix), interpolation=cv.INTER_AREA)
-                infects_all[ii] = np.reshape(infects_all[ii], (num_pix, num_pix, 1))
+                    infects_all[ii] = cv.resize(infects_all[ii], dsize=(num_pix, num_pix), 
+                                                interpolation=cv.INTER_AREA)
+                    infects_all[ii] = np.reshape(infects_all[ii], (num_pix, num_pix, 1))
             except :
                 del_lst.append(ii)
         
         for idx in del_lst[::-1] :
             del cts_all[idx]
-            del lungs_all[idx]
-            del infects_all[idx]
+            if os.path.isfile(self.lung_mask_file) :
+                del lungs_all[idx]
+                del infects_all[idx]
 
         self.cts_all = cts_all
         self.lungs_all = lungs_all
         self.infects_all = infects_all
-        self.image_height, self.image_width = max_h, max_w
         self.image_size = num_pix
 
-            
-    def write_video(self, output_file, choice_str='cts', FPS=24):
+
+    def write_gif(self, choice_str='cts', fps=10) :
+        """Creates a GIF file.
+        inputs: 
+            - choice_str: either 'cts', 'lungs', or 'infections'
+        """
+        args = opts.parse_arguments()
+        outfile = 'gif-pid{:02d}-{}.gif'.format(self.patient_id, choice_str)
+        output_file = os.path.join(args.outdir, outfile)
+
+        image_dims = (self.image_size, self.image_size)
+        if choice_str == 'cts' :
+            images = self.cts_all
+        elif choice_str == 'lungs' :
+            images = self.lungs_all
+        elif choice_str == 'infections' :
+            images = self.infects_all
+        else :
+            raise Exception("Unknown choice. Your options are 'cts', 'lungs', or 'infections'")      
+
+        fig = plt.figure()
+        fig.set_size_inches(image_dims[0]/50, image_dims[1]/50)
+        ax = fig.add_axes([0, 0, 1, 1], frameon=False, aspect=1)
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # Create frames
+        print('writing images ...')
+        images = np.squeeze(images)
+        frames = []
+        for ii in range(len(images)):
+            plt_im = plt.imshow(images[ii], cmap='bone', vmin=0, vmax=1, animated=True)
+            frames.append([plt_im])
+
+        # Save into a GIF file that loops forever
+        animation = anim.ArtistAnimation(fig, frames)
+        animation.save(output_file, writer='imagemagick', fps=fps)       
+        print('Image saved.')
+    
+
+    def write_video(self, output_file, choice_str='cts', FPS=24) :
+        args = opts.parse_arguments()
+
+        outfile = 'vid-pid{:02d}-{}.mp4'.format(self.patient_id, choice_str)
+        output_file = os.path.join(args.outdir, outfile)
+
         image_dims = (self.image_width, self.image_height)
         video = cv.VideoWriter(output_file, -1, FPS, image_dims)
         if choice_str == 'cts' :

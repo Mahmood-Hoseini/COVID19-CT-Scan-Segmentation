@@ -7,8 +7,8 @@ import logging
 
 definitions = [
     # model               type   default help
-    ('model',            (str,   'convnet',        "Model: convnet")),
-    ('num_filters',      (list,  [32,64,128,256],    "Number of filters in convolutional layers.")),
+    ('model',            (str,   'convnet',          "Model: convnet")),
+    ('num_filters',      (list,  [32,128,128,256],   "Number of filters in convolutional layers.")),
     ('padding',          (str,   'same',             "Padding in convolutional layers. Either `same' or `valid'.")),
     ('dropout',          (float,  0.25,              "Rate for dropout of activation units.")),
 
@@ -20,12 +20,12 @@ definitions = [
                           'help': "Relative contribution of two outputs (lung_output and infect_output)"}),
 
     # training
-    ('epochs',           (int,   1,     "Number of epochs to train.")),
-    ('batch-size',       (int,   128,     "Mini-batch size for training.")),
+    ('epochs',           (int,   100,    "Number of epochs to train.")),
+    ('batch-size',       (int,   128,    "Mini-batch size for training.")),
     ('validation-split', (float, 0.1,    "Percentage of training data to hold out for validation.")),
     ('optimizer',        (str,   'adam', "Optimizer: sgd, rmsprop, adagrad, adadelta, adam, adamax, or nadam.")),
     ('metrics',          (str,   'dice', "Training metrics: dice, jaccard, accuracy")),
-    ('learning-rate',    (float, 5e-4,   "Optimizer learning rate.")),
+    ('learning-rate',    (float, 1e-4,   "Optimizer learning rate.")),
     ('momentum',         (float, None,   "Momentum for SGD optimizer.")),
     ('decay',            (float, None,   "Learning rate decay (not applicable for nadam).")),
     ('shuffle_train_val',{'default': False, 'action': 'store_true',
@@ -35,8 +35,8 @@ definitions = [
     ('seed',             (int,   42,   "Seed for numpy RandomState")),
 
     # files
-    ('datadir',          (str,   'test-assets',        "Directory containing patientXX/ directories.")),
-    ('testdir',          (str,   'test-assets',        "Directory containing patientXX/ directories for testing.")),
+    ('datadir',          (str,   'training-set',       "Directory containing patientXX/ directories.")),
+    ('testdir',          (str,   'testing-set',        "Directory containing patientXX/ directories for testing.")),
     ('outdir',           (str,   'outputs',            "Directory to write output data.")),
     ('indir',            (str,   '',                   "Directory that contain data.")),
     ('outfile',          (str,   'weights-final.hdf5', "File to write final model weights.")),

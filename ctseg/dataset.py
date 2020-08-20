@@ -43,9 +43,13 @@ def load_images(data_dir):
     infects_mask_all = []
     for patient_dir in patient_dirs:
         p = patient.PatientData(patient_dir)
-        cts_all += p.cts_all
-        lungs_mask_all += p.lungs_all
-        infects_mask_all += p.infects_all
+        if (len(p.lungs_all) == len(p.cts_all) and 
+            len(p.infects_all) == len(p.cts_all)) :
+            cts_all += p.cts_all
+            lungs_mask_all += p.lungs_all
+            infects_mask_all += p.infects_all
+        else :
+            print('patient {:02d} does not have mask files. Did not included.'.format(p.patient_id))
 
     return cts_all, lungs_mask_all, infects_mask_all
 
