@@ -22,14 +22,16 @@ For the model and results, please check [here](https://chuckyee.github.io/cardia
 
 ## Installation
 
-The package is written in Python and can be installed using ```bash python setup.py install``` or ```bash pip install .``` The you should be able to use the packaage:
+The package is written in Python and can be installed using ```python setup.py install``` or ```pip install .``` The you should be able to use the packaage:
 
 ```python
 from ctseg import patient
 
 patient_data = patient.PatientData("testing-set/patient00")
 ```
-find out more details see ```how2useit/how2use-patient.py```.
+`PatientData` loads CT images, makes lung masks, and crops them. Find out more details see ```how2useit/how2use-patient.py```.
+
+![Sample Lung Mask](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/make-lungmask.png)
 
 Model is a convolutional neural network with one input (CT images) and two outputs (segmented lungs and infections) (see ```ctseg/models/convnet.py ```). Model is trained and the outputs, including weights, are saved in the ```outputs``` folder. To explore the model performance see ```scripts/evaluate.py```
 
