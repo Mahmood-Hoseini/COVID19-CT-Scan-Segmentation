@@ -31,7 +31,7 @@ patient_data = patient.PatientData("testing-set/patient00")
 ```
 `PatientData` loads CT images, makes lung masks, and crops them. Find out more details see ```how2useit/how2use-patient.py```.
 
-![Sample Lung Mask](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/make-lungmask.png)
+![Sample Lung Mask](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/make-lungmask.png | width=100)
 
 
 Model is a convolutional neural network with one input (CT images) and two outputs (segmented lungs and infections) (see ```ctseg/models/convnet.py ```). Model is trained and the outputs, including weights, are saved in the ```outputs``` folder. To explore the model performance see ```scripts/evaluate.py```
