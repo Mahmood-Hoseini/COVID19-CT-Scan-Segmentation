@@ -14,6 +14,8 @@
 
 COVID-19 patients usually develop pneumonia which rapidly progress to respiratory failure. Computed Tomography (CT) scan images play a supporative role in rapid diagnosis and the severity of the disease. Models that can find evidence of COVID-19 and/or characterize its findings can play a crucial role in optimizing diagnosis and treatment, especially in areas with a shortage of expert radiologists. This repository contains a package to identify lungs infections in CT scan images. 
 
+![Sample CT Scan](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/gif-pid11-cts.gif)
+
 For problem description and accessing raw dataset, please check [this](https://www.kaggle.com/andrewmvd/covid19-ct-scans)
 
 For the model and results, please check [here](https://chuckyee.github.io/cardiac-segmentation/).
@@ -29,12 +31,17 @@ from ctseg import patient
 
 patient_data = patient.PatientData("testing-set/patient00")
 ```
-`PatientData` loads CT images, makes lung masks, and crops them. Find out more details see ```how2useit/how2use-patient.py```.
+`PatientData` loads CT images which are used to train a convolutional network. Find out more details see ```how2useit/how2use-patient.py```.
 
-<a href="Sample Lung Mask"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/make-lungmask.png" align="middle" height="200" ></a>
+<a href="Sample Segmented Lungs"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-lungs.png" align="middle" height="300" ></a>
+
+<a href="Sample Lung Mask"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/lung-mask-and-bbox.png" align="middle" height="200" ></a>
 
 
-Model is a convolutional neural network with one input (CT images) and two outputs (segmented lungs and infections) (see ```ctseg/models/convnet.py ```). Model is trained and the outputs, including weights, are saved in the ```outputs``` folder. To explore the model performance see ```scripts/evaluate.py```
+Using segmented lungs, CT image were cropped and fed into a convolutional network to train segmenting for infections (see `ctseg/models/convnet.py `). Models were trained and the outputs, including weights, were saved in the `outputs` folder. To explore the model performance see `scripts/evaluate.py`
+
+<a href="Sample Segmented Infections"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-infections.png" align="middle" height="300" ></a>
+
 
 To test the model on new patient data, fill out `testdir` in the `defaults.config` file and run
 
@@ -46,7 +53,7 @@ python -u scripts/run_on_test_patients.py defaults.config
 
 
 ## About this dataset
-This dataset contains images from 20 patients (divided into 19 training and 1 testing) diagnosed with COVID-19 (see references). Files containing corresponding segmentations of lungs and infections made by experts are included as well.
+This dataset contains images from 61 patients (divided into 55 training and 6 testing) diagnosed with COVID-19 (see references). Files containing corresponding segmentations of lungs and infections made by experts are included as well.
 
 ## Acknowledgements
 
@@ -55,4 +62,6 @@ This dataset contains images from 20 patients (divided into 19 training and 1 te
 [2] - Glick, Y., 2020. Viewing Playlist: COVID-19 Pneumonia. Radiopaedia.Org. Available [here](https://radiopaedia.org/playlists/25887)
 
 [3] - Kaggle dataset available [here](https://www.kaggle.com/andrewmvd/covid19-ct-scans)
+
+[4] - Zhang, Kang, Xiaohong Liu, Jun Shen, Zhihuan Li, Ye Sang, Xingwang Wu, Yunfei Zha et al. "Clinically applicable AI system for accurate diagnosis, quantitative measurements, and prognosis of covid-19 pneumonia using computed tomography." Cell (2020).
 
