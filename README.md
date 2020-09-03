@@ -63,3 +63,5 @@ This dataset contains images from 61 patients (divided into 55 training and 6 te
 
 [4] - Zhang, Kang, Xiaohong Liu, Jun Shen, Zhihuan Li, Ye Sang, Xingwang Wu, Yunfei Zha et al. "Clinically applicable AI system for accurate diagnosis, quantitative measurements, and prognosis of covid-19 pneumonia using computed tomography." Cell (2020).
 
+[5] - Cardiac MRI Segmentation [blog](https://chuckyee.github.io/cardiac-segmentation/) and [github](https://chuckyee.github.io/cardiac-segmentation/)
+
