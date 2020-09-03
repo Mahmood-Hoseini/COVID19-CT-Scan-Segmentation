@@ -12,32 +12,18 @@ warnings.filterwarnings('ignore')
 
 
 from ctseg import opts, patient, dataset, models
+from scripts import train
 
-
-def plot_and_save_ROC(model, generator, steps_per_epoch) :
-    lung_infect_roc = []
-    counter = 0
-    for ii in range(steps_per_epoch):
-        cts, lungs_infects_mask = next(generator)
-        lungs_mask = lungs_infects_mask['lung_output']
-        infects_mask = lungs_infects_mask['infect_output']
-        lung_mask_pred, infect_mask_pred = model.predict(cts)
-        for yl_true, yi_true, yl_pred, yi_pred in zip(
-            lungs_mask, infects_mask, lung_mask_pred, infect_mask_pred) :
-
-            yl_true = np.squeeze(yl_true.astype('float16')).ravel() # make it into vectors
-            yl_pred = np.squeeze(np.round(yl_pred).astype('float16')).ravel() # make it into vectors
-            fprl, tprl, _ = roc_curve(yl_true, yl_pred)            
-
-            yi_true = np.squeeze(yi_true.astype('float16')).ravel() # make it into vectors
-            yi_pred = np.squeeze(np.round(yi_pred).astype('float16')).ravel() # make it into vectors
-            fpri, tpri, _ = roc_curve(yi_true, yi_pred)
-            lung_infect_roc = lung_infect_roc + fprl + tprl + fpri + tpri
-            counter += 1
+def plot_and_save_ROC(model, cts, masks, figname) :
+    mask_roc = []
+    pred_masks = model.predict(cts)
+    y_true = np.squeeze(masks.astype('int32')).ravel() # make it into vectors
+    y_pred = np.squeeze(pred_masks.astype('float16')).ravel() # make it into vectors
+    y_true = np.where(y_true>0.5, 1, 0) # binarizing true values
+    fpr, tpr, _ = roc_curve(y_true, y_pred) 
 
     fig, ax = plt.subplots(1,1)
-    ax.plot(fprl, tprl, 'b', label='Lung ROC (area=%0.2f)' %auc(fprl,tprl))
-    ax.plot(fpri, tpri, 'r', label='Infect ROC (area=%0.2f)' %auc(fpri,tpri))
+    ax.plot(fpr, tpr, 'b', label='ROC (area=%0.2f)' %auc(fpr,tpr))
     ax.plot([0, 1], [0, 1], 'k--')
     ax.set_xlim([0.0, 1.0])
     ax.set_ylim([0.0, 1.05])
@@ -45,33 +31,9 @@ def plot_and_save_ROC(model, generator, steps_per_epoch) :
     ax.set_ylabel('True Positive Rate')
     ax.set_title('Receiver operating characteristic')
     ax.legend(loc="lower right")
-    plt.show
-
-    return lung_infect_roc, counter
-
-
-def compare_actual_and_predicted(X, yl_mask, yi_mask, yl_pred, yi_pred, 
-                                 num_pix, figname) :
-    fig = plt.figure(figsize=(12,7))
-    plt.subplot(2,3,1)
-    plt.imshow(np.reshape(X, [num_pix, num_pix]))
-    plt.title('CT image')
-
-    plt.subplot(2,3,2)
-    plt.imshow(np.reshape(yl_mask, [num_pix, num_pix]), cmap='bone')
-    plt.title('lung mask')
-    plt.subplot(2,3,3)
-    plt.imshow(np.reshape(yi_mask, [num_pix, num_pix]), cmap='bone')
-    plt.title('infection mask')
-
-    plt.subplot(2,3,5)
-    plt.imshow(np.reshape(yl_pred, [num_pix, num_pix]), cmap='bone')
-    plt.title('predicted lung mask')
-    plt.subplot(2,3,6)
-    plt.imshow(np.reshape(yi_pred, [num_pix, num_pix]), cmap='bone')
-    plt.title('predicted infection mask')
-
     plt.savefig(figname, bbox_inches='tight')
+
+    return np.reshape(fpr, [-1,1]), np.reshape(tpr, [-1,1])
 
 
 def dice(y_true, y_pred, smooth=1):
@@ -82,123 +44,85 @@ def dice(y_true, y_pred, smooth=1):
 
 
 def jaccard(y_true, y_pred, smooth=100):
-    intersection = K.sum(K.abs(y_true * y_pred), axis=-1)
-    sum_ = K.sum(K.abs(y_true) + K.abs(y_pred), axis=-1)
+    intersection = K.sum(K.abs(y_true * y_pred), axis=[0,1,2])
+    sum_ = K.sum(K.abs(y_true) + K.abs(y_pred), axis=[0,1,2])
     jac = (intersection + smooth) / (sum_ - intersection + smooth)
-    return (1 - jac) * smooth
+    return (1 - jac)
 
 
-def generate_stats(model, generator, steps_per_epoch, return_images=False):
-    lung_dices = []
-    lung_jaccard = []
-    infect_dices = []
-    infect_jaccard = []
+def generate_stats(model, cts, masks):
+    mask_dices = []
+    mask_jaccard = []
     predictions = []
     sess = tf.Session()
     sess.run(tf.global_variables_initializer())
-    for ii in tqdm.tqdm(range(steps_per_epoch)):
-        cts, lungs_infects_mask = next(generator)
-        lungs_mask = lungs_infects_mask['lung_output']
-        infects_mask = lungs_infects_mask['infect_output']
-        lung_mask_pred, infect_mask_pred = model.predict(cts)
-        for yl_true, yi_true, yl_pred, yi_pred in zip(
-            lungs_mask, infects_mask, lung_mask_pred, infect_mask_pred) :
+    pred_masks = model.predict(cts)
+    for ii in tqdm.tqdm(range(cts)) :
+        y_true = masks[ii].astype('float16')
+        y_pred = pred_masks[ii].astype('float16')
+        mask_dices.append(dice(y_true, y_pred).eval(session=sess))
+        mask_jaccard.append(jaccard(y_true, y_pred).eval(session=sess))
 
-            yl_true = yl_true.astype('float16')
-            yl_pred = np.round(yl_pred).astype('float16')
-            lung_dices.append(dice(yl_true, yl_pred, smooth=1).eval(session=sess))
-            lung_jaccard.append(jaccard(yl_true, yl_pred).eval(session=sess))
-
-            yi_true = yi_true.astype('float16')
-            yi_pred = np.round(yi_pred).astype('float16')
-            infect_dices.append(dice(yi_true, yi_pred, smooth=1).eval(session=sess))
-            infect_jaccard.append(jaccard(yi_true, yi_pred).eval(session=sess))
-
-        if return_images:
-            for ct, yl_true, yi_true, yl_pred, yi_pred in zip(cts, lungs_mask, 
-                                        infects_mask, lung_mask_pred, infect_mask_pred):
-                predictions.append((ct[:,:,0], yl_true[:,:,0], yi_true[:,:,0], 
-                                               yl_pred[:,:,0], yi_pred[:,:,0]))
-    print("Lung Dice:    {:.3f} +/- {:.3f}".format(np.mean(lung_dices), np.std(lung_dices)))
-    print("Lung Jaccard:    {:.3f} +/- {:.3f}".format(np.mean(lung_jaccard), np.std(lung_jaccard)))
-    print("Infection Dice:    {:.3f} +/- {:.3f}".format(np.mean(infect_dices), np.std(infect_dices)))
-    print("Infection Jaccard:    {:.3f} +/- {:.3f}".format(np.mean(infect_jaccard), np.std(infect_jaccard)))
-    return lung_dices, lung_jaccard, infect_dices, infect_jaccard, predictions
+    print("Dice:    {:.3f} +/- {:.3f}".format(np.mean(mask_dices), np.std(mask_dices)))
+    print("Jaccard: {:.3f} +/- {:.3f}".format(np.mean(mask_jaccard), np.std(mask_jaccard)))
+    return np.reshape(mask_dices, [-1,1]), np.reshape(mask_jaccard, [-1,1])
 
 
 def evaluate_now():
     args = opts.parse_arguments()
 
-    augmentation_args = {
-        'rotation_range': args.rotation_range,
-        'width_shift_range': args.width_shift_range,
-        'height_shift_range': args.height_shift_range,
-        'shear_range': args.shear_range,
-        'zoom_range': args.zoom_range,
-    }
-
     print("Loading dataset...")
-    train_generator, train_steps_per_epoch, \
-        val_generator, val_steps_per_epoch = dataset.create_generators(
-            args.datadir, args.batch_size,
-            validation_split=args.validation_split,
-            shuffle_train_val=args.shuffle_train_val,
-            shuffle=args.shuffle,
-            seed=args.seed,
-            augment_training=args.augment_training,
-            augment_validation=args.augment_validation,
-            augmentation_args=augmentation_args)
+    cts_all, lungs_mask_all, infects_mask_all, img_size = dataset.load_images(args.datadir)
 
-    # get image dimensions from first batch
-    cts, lungs_infects_mask = next(train_generator)
-    height, width, channels = cts[0].shape
+    if args.seed is not None:
+        np.random.seed(args.seed)
 
-    print("Building model...")
-    string_to_model = {
-        "convnet": models.cts_model,
-    }
+    if args.shuffle_train_val:
+        # shuffle images and masks in parallel
+        rng_state = np.random.get_state()
+        np.random.shuffle(cts_all)
+        np.random.set_state(rng_state)
+        np.random.shuffle(lungs_mask_all)
+        np.random.set_state(rng_state)
+        np.random.shuffle(infects_mask_all)
+
+    # get image dimensions
+    height, width, channels = cts_all[0].shape
+
+    print("Building segmentation model...")
+    # build lseg model to segment lungs
+    string_to_model = { "convnet": models.lung_seg }
     model = string_to_model[args.model]
-    model_ = model([height, width, channels], num_filters=args.num_filters, 
-                padding=args.padding, dropout=args.dropout)
+    lseg_model = model([height, width, channels], num_filters=args.lseg_filters, 
+                            padding=args.padding)
+    lseg_model.load_weights(os.path.join(args.outdir, args.lseg_outfile))
 
-    model_.load_weights(os.path.join(args.outdir, args.outfile))
+    # build model for infection segmentation
+    string_to_model = { "convnet": models.infect_seg }
+    model = string_to_model[args.model]
+    iseg_model = model([height, width, channels], num_filters=args.iseg_filters, 
+                    padding=args.padding, dropout=args.dropout)
+    iseg_model.load_weights(os.path.join(args.outdir, args.iseg_outfile))
 
-    print("Training Set:")
-    train_lung_infect_roc, counter = plot_and_save_ROC(model_, train_generator, train_steps_per_epoch)
-    train_lung_infect_roc = np.reshape(np.asarray(train_lung_infect_roc), [-1,counter], order='F')
-    np.savetxt(args.outdir + "/train_roc.txt", train_lung_infect_roc)
-    train_lung_dices, train_lung_jacc, train_infect_dices, train_infect_jacc, \
-            train_images = generate_stats(model_, train_generator, train_steps_per_epoch,
-                            return_images=args.checkpoint)
 
-    print("Validation Set:")
-    val_lung_infect_roc, counter = plot_and_save_ROC(model_, val_generator, val_steps_per_epoch)
-    val_lung_infect_roc = np.reshape(np.asarray(val_lung_infect_roc), [-1,counter], order='F')
-    np.savetxt(args.outdir + "/val_roc.txt", val_lung_infect_roc)
-    val_lung_dices, val_lung_jacc, val_infect_dices, val_infect_jacc, \
-            val_images = generate_stats(model_, val_generator, val_steps_per_epoch,
-                            return_images=args.checkpoint)
+    print("Lung segmentation:")
+    outfile = os.path.join(args.outdir, "lung-seg-ROC.pdf")
+    lungs_fpr, lungs_tpr = plot_and_save_ROC(lseg_model, cts_all, lungs_mask_all, outfile)
+    np.savetxt(args.outdir + "/lungs_roc.txt", np.concatenate((lungs_fpr, lungs_tpr), axis=1))
+    lungs_dices, lungs_jacc = generate_stats(lseg_model, cts_all, lungs_mask_all)
+    np.savetxt(args.outdir + "/lungs_stats.txt", np.concatenate((lungs_dices, lungs_jacc), axis=1))
 
-    if args.outfile:
-        train_data = np.reshape(np.asarray(train_lung_dices + train_lung_jacc + 
-                                           train_infect_dices, train_infect_jacc), [-1,4], order='F')
-        val_data = np.reshape(np.asarray(val_lung_dices + val_lung_jacc + 
-                                         val_infect_dices + val_infect_jacc), [-1,4], order='F')
-        np.savetxt(args.outdir + "/train_stats.txt", train_data)
-        np.savetxt(args.outdir + "/val_stats.txt", val_data)
+    print("Infection segmentation:")
+    pred_lungs = lseg_model.predict(cts_all, batch_size=args.batch_size)
+    pred_lungs = tf.cast(pred_lungs+0.5, dtype=tf.int32)
+    ccts_all, cinfects_all = train.prepare_img_data(cts_all, pred_lungs, 
+                                                    infects_mask_all, img_size)
+    outfile = os.path.join(args.outdir, "infection-seg-ROC.pdf")
+    infects_fpr, infects_tpr = plot_and_save_ROC(iseg_model, ccts_all, cinfects_all, outfile)
+    np.savetxt(args.outdir + "/infects_roc.txt", np.concatenate((infects_fpr, infects_tpr), axis=1))
+    infects_dices, infects_jacc = generate_stats(iseg_model, ccts_all, cinfects_all)
+    np.savetxt(args.outdir + "/infects_stats.txt", np.concatenate((infects_dices, infects_jacc), axis=1))
 
-    if args.checkpoint:
-        print("Saving images...")
-        for ii, dice in enumerate(train_infect_dices) :
-            ct, yl_true, yi_true, yl_pred, yi_pred = train_images[ii]
-            figname = "train-{:03d}-{:.3f}.png".format(ii, dice)
-            figname = os.path.join(args.outdir, figname)
-            compare_actual_and_predicted(ct, yl_true, yi_true, yl_pred, yi_pred, ct.shape[1], figname)
-        for ii, dice in enumerate(val_infect_dices):
-            ct, yl_true, yi_true, yl_pred, yi_pred = val_images[ii]
-            figname = "val-{:03d}-{:.3f}.png".format(ii, dice)
-            figname = os.path.join(args.outdir, figname)
-            compare_actual_and_predicted(ct, yl_true, yi_true, yl_pred, yi_pred, ct.shape[1], figname)
 
 if __name__ == '__main__':
     evaluate_now()

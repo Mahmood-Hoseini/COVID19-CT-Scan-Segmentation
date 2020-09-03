@@ -5,18 +5,20 @@ from __future__ import division, print_function
 import os, glob
 import argparse
 import logging
+import numpy as np
+import tensorflow as tf
 from keras import losses, optimizers, utils
 from keras.optimizers import SGD, RMSprop, Adagrad
 from keras.optimizers import Adadelta, Adam, Adamax, Nadam
 from keras.callbacks import ModelCheckpoint
 from keras import backend as K
+import cv2 as cv
 
 import warnings
 warnings.filterwarnings('ignore')
 
 
-from ctseg import dataset, models, loss, opts
-
+from ctseg import dataset, models, loss, opts, patient
 
 
 def dice(y_true, y_pred, smooth=1):
@@ -60,38 +62,82 @@ def select_metrics(metrics_name):
     return metrics[metrics_name]
 
 
-def train_now(args):
-    logging.info("Loading dataset...")
-    augmentation_args = {
-        'height_shift_range': args.height_shift_range,
-        'width_shift_range': args.width_shift_range,
-        'rotation_range': args.rotation_range,
-        'zoom_range': args.zoom_range,
-        'shear_range': args.shear_range,
-    }
+def prepare_img_data(cts, pred_lungs, infects, img_size) :
+    ccts = []
+    cinfects = []
+    bad_ids = []
+    for ii in range(len(cts)) :
+        try :
+            ct_img = np.asarray(cts[ii, :, :, 0])
+            lung_img = pred_lungs[ii, :, :, 0].eval(session=tf.Session())
+            infect_img = np.asarray(infects[ii, :, :, 0])
 
-    train_generator, train_steps_per_epoch, \
-        val_generator, val_steps_per_epoch = dataset.create_generators(
-            args.datadir, args.batch_size,
-            validation_split=args.validation_split,
-            shuffle_train_val=args.shuffle_train_val,
-            shuffle=args.shuffle,
-            seed=args.seed,
-            augment_training=args.augment_training,
-            augment_validation=args.augment_validation,
-            augmentation_args=augmentation_args)
+            bounds = patient.make_lungmask_bbox(ct_img, lung_img, display_flag=False)
 
-    # get image dimensions from the first batch
-    cts, lungs_infects_mask_dict = next(train_generator)
-    height, width, channels = cts[0].shape
+            cct_img = patient.crop_(ct_img, bounds)
+            img = cv.resize(cct_img, dsize=(img_size, img_size), interpolation=cv.INTER_AREA)
+            img = np.reshape(img, (img_size, img_size, 1))
+            ccts.append(img)
 
-    logging.info("Building model...")
-    string_to_model = {
-        "convnet": models.cts_model,
-    }
-    model = string_to_model[args.model]
-    model_ = model([height, width, channels], num_filters=args.num_filters, 
-                padding=args.padding, dropout=args.dropout)
+            cinfect_img = patient.crop_(infect_img.astype('float32'), bounds)
+            img = cv.resize(cinfect_img, dsize=(img_size, img_size), interpolation=cv.INTER_AREA)
+            img = np.reshape(img, (img_size, img_size, 1))
+            cinfects.append(img)
+        except :
+            bad_ids.append(ii)
+    # print(cts.shape, len(ccts), len(cinfects), len(bad_ids))
+    return np.asarray(ccts), np.asarray(cinfects)
+
+
+def train_now(args, train_for='lungs') :
+    """
+    Geneate batches of image data.
+    inputs:
+        - args: arguments prepared using opts.parse_arguments
+        - train_for: string. either 'lungs' or 'infections'
+    outputs:
+        - None. Saves final weights in output directory.
+    """
+    if train_for not in ['lungs', 'infections'] :
+        raise Exception("Unknown train_for. It must be 'lungs' or 'infections'.")
+
+    print("Loading dataset...")
+    cts_all, lungs_mask_all, infects_mask_all, img_size = dataset.load_images(args.datadir)
+
+    if args.seed is not None:
+        np.random.seed(args.seed)
+
+    if args.shuffle_train_val:
+        # shuffle images and masks in parallel
+        rng_state = np.random.get_state()
+        np.random.shuffle(cts_all)
+        np.random.set_state(rng_state)
+        np.random.shuffle(lungs_mask_all)
+        np.random.set_state(rng_state)
+        np.random.shuffle(infects_mask_all)
+
+    # get image dimensions 
+    height, width, channels = cts_all[0].shape
+
+    print("Building segmentation model...")
+    if train_for == 'lungs' :
+        string_to_model = { "convnet": models.lung_seg }
+        model = string_to_model[args.model]
+        model_ = model([height, width, channels], num_filters=args.lseg_filters, 
+                        padding=args.padding)
+    else :
+        # build lseg model to segment lungs
+        string_to_model = { "convnet": models.lung_seg }
+        model = string_to_model[args.model]
+        lseg_model = model([height, width, channels], num_filters=args.lseg_filters, 
+                                padding=args.padding)
+        lseg_model.load_weights(os.path.join(args.outdir, args.lseg_outfile))
+
+        # build model for infection segmentation
+        string_to_model = { "convnet": models.infect_seg }
+        model = string_to_model[args.model]
+        model_ = model([height, width, channels], num_filters=args.iseg_filters, 
+                        padding=args.padding, dropout=args.dropout)
 
     model_.summary()
 
@@ -100,7 +146,6 @@ def train_now(args):
         model_.load_weights(args.load_weights)
 
     # instantiate optimizer, and only keep args that have been set
-    # (not all optimizers have args like `momentum' or `decay')
     optimizer_args = {
         'lr':       args.learning_rate,
         'momentum': args.momentum,
@@ -129,50 +174,90 @@ def train_now(args):
 
     metrics = select_metrics(args.metrics)
 
-    loss_weight_dict = {'lung_output': args.output_weights[0], 
-                        'infect_output': args.output_weights[1]}
-
-    loss_dict = {'lung_output': lossfunc, 'infect_output': lossfunc}
-
-    model_.compile(optimizer=optimizer, loss=loss_dict, loss_weights=loss_weight_dict, metrics=[metrics])
+    model_.compile(optimizer=optimizer, loss=lossfunc, metrics=[metrics])
 
     ##### automatic saving of model during training
     if args.checkpoint:
         if args.loss == 'pixel':
             filepath = os.path.join(args.outdir, 
-                    "weights-{epoch:02d}-{val_infect_output_acc:.4f}.hdf5")
-            monitor = 'val_infect_output_acc'
+                    "weights-{epoch:02d}-{val_acc:.4f}.hdf5")
+            monitor = 'val_acc'
             mode = 'max'
         elif args.loss == 'bce_dice':
             filepath = os.path.join(args.outdir, 
-                    "weights-{epoch:02d}-{val_infect_output_dice:.4f}.hdf5")
-            monitor='val_infect_output_dice'
+                    "weights-{epoch:02d}-{val_dice:.4f}.hdf5")
+            monitor='val_dice'
             mode = 'max'
         elif args.loss == 'jaccard':
             filepath = os.path.join(args.outdir, 
-                    "weights-{epoch:02d}-{val_infect_output_jaccard:.4f}.hdf5")
-            monitor='val_infect_output_jaccard'
+                    "weights-{epoch:02d}-{val_jaccard:.4f}.hdf5")
+            monitor='val_jaccard'
             mode = 'max'
 
-        checkpoint = ModelCheckpoint(filepath, monitor=monitor, verbose=1, save_best_only=True, mode=mode)
+        checkpoint = ModelCheckpoint(filepath, monitor=monitor, 
+                                     verbose=1, save_best_only=True, mode=mode)
         callbacks = [checkpoint]
     else:
         print("No model checkpoint set...")
         callbacks = []
 
-    # train
+    ### augmentation parameters
+    augmentation_args = {
+        'height_shift_range': args.height_shift_range,
+        'width_shift_range': args.width_shift_range,
+        'rotation_range': args.rotation_range,
+        'zoom_range': args.zoom_range,
+        'shear_range': args.shear_range,
+    }
+
+    # Beging train
+    if train_for == 'lungs' :
+        print("Preparing Image Data Generators...")
+        img_data = np.concatenate((cts_all, lungs_mask_all), axis=-1)
+        train_generator, train_steps_per_epoch, \
+            val_generator, val_steps_per_epoch = dataset.create_generators(
+                args.datadir, args.batch_size, img_data=img_data,
+                validation_split=args.validation_split,
+                shuffle_train_val=args.shuffle_train_val,
+                shuffle=args.shuffle,
+                seed=args.seed,
+                augment_training=args.augment_training,
+                augment_validation=args.augment_validation,
+                augmentation_args=augmentation_args)
+        outfname = args.lseg_outfile
+    else :
+        print("Cropping CTs for lung area...")
+        pred_lungs = lseg_model.predict(cts_all, batch_size=args.batch_size)
+        pred_lungs = tf.cast(pred_lungs+0.5, dtype=tf.int32)
+        ccts_all, cinfects_all = prepare_img_data(cts_all, pred_lungs, 
+                                                    infects_mask_all, img_size)
+
+        print("Preparing Image Data Generators...")
+        img_data = np.concatenate((ccts_all, cinfects_all), axis=-1)
+        train_generator, train_steps_per_epoch, \
+            val_generator, val_steps_per_epoch = dataset.create_generators(
+                args.datadir, args.batch_size, img_data=img_data,
+                validation_split=args.validation_split,
+                shuffle_train_val=args.shuffle_train_val,
+                shuffle=args.shuffle,
+                seed=args.seed,
+                augment_training=args.augment_training,
+                augment_validation=args.augment_validation,
+                augmentation_args=augmentation_args)
+        outfname = args.iseg_outfile
+
     logging.info("Begin training...")
-    ress = model_.fit_generator(train_generator,
-                    epochs=args.epochs,
-                    steps_per_epoch=train_steps_per_epoch,
-                    validation_data=val_generator,
-                    validation_steps=val_steps_per_epoch,
-                    callbacks=callbacks,
-                    verbose=1)
-    print(ress.history.keys())
-    model_.save(os.path.join(args.outdir, args.outfile))
+    model_.fit_generator(train_generator,
+                        epochs=args.epochs,
+                        steps_per_epoch=train_steps_per_epoch,
+                        validation_data=val_generator,
+                        validation_steps=val_steps_per_epoch,
+                        callbacks=callbacks,
+                        verbose=1)
+
+    model_.save(os.path.join(args.outdir, outfname))
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     args = opts.parse_arguments()
-    train_now(args)
+    train_now(args, train_for='lungs')
