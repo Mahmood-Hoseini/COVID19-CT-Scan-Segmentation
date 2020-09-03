@@ -16,9 +16,7 @@ COVID-19 patients usually develop pneumonia which rapidly progress to respirator
 
 ![Sample CT Scan](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/gif-pid11-cts.gif)
 
-For problem description and accessing raw dataset, please check [this](https://www.kaggle.com/andrewmvd/covid19-ct-scans)
-
-For the model and results, please check [here](https://chuckyee.github.io/cardiac-segmentation/).
+To download training and testing datasets see [this](https://drive.google.com/drive/folders/1Y_LtHDZBq0K-B8zrkkN3SsAmAw6M7TJi?usp=sharing)
 
 ![Sample CT Scan Segmented](https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/ct-scan_sample-images.png)
 
