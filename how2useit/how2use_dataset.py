@@ -10,21 +10,18 @@ def img_generator(data_dir, batch_size, val_split):
     (train_gen, train_steps_per_epoch,
     val_gen, val_steps_per_epoch) = dataset.create_generators(data_dir, 
                                                               batch_size,
-                                                              val_split)
+                                                              img_data=[],
+                                                              validation_split=val_split)
 
-    cts, lungs_infects_mask_dict = next(train_gen)
-    assert cts[0].shape == (100, 100, 1)
-    assert 'lung_output' in lungs_infects_mask_dict.keys()
-    assert 'infect_output' in lungs_infects_mask_dict.keys()
-    assert train_steps_per_epoch == ceil((1-val_split)*55/batch_size)
+    cts, masks = next(train_gen)
+    assert cts[0].shape == (128, 128, 1)
 
-    cts, lungs_infects_mask_dict = next(val_gen)
-    assert cts[0].shape == (100, 100, 1)
-    assert val_steps_per_epoch == ceil(val_split*55/batch_size)
+    cts, masks = next(val_gen)
+    assert cts[0].shape == (128, 128, 1)
 
 
 ## test case
-data_dir = "../test-assets/"
+data_dir = "../testing-dir/"
 batch_size = 16
 val_split = 0.5
 img_generator(data_dir, batch_size, val_split)
