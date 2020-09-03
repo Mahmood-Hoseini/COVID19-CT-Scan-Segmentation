@@ -1,6 +1,6 @@
 from __future__ import division, print_function
 
-import os, glob
+import os, glob, tqdm
 import numpy as np
 from math import ceil
 from keras.preprocessing.image import ImageDataGenerator
@@ -10,14 +10,6 @@ warnings.filterwarnings('ignore')
 
 
 from . import patient
-
-
-def make_multi_output_flow(orig_flow, lung_tensor, infect_tensor):
-    while True:
-        (X, y_next_i) = next(orig_flow)
-        y_next = {'lung_output': lung_tensor[y_next_i], 
-                  'infect_output': infect_tensor[y_next_i]} 
-        yield X, y_next
 
 
 def load_images(data_dir):
@@ -41,7 +33,7 @@ def load_images(data_dir):
     cts_all = []
     lungs_mask_all = []
     infects_mask_all = []
-    for patient_dir in patient_dirs:
+    for patient_dir in tqdm.tqdm(patient_dirs) :
         p = patient.PatientData(patient_dir)
         if (len(p.lungs_all) == len(p.cts_all) and 
             len(p.infects_all) == len(p.cts_all)) :
@@ -49,27 +41,23 @@ def load_images(data_dir):
             lungs_mask_all += p.lungs_all
             infects_mask_all += p.infects_all
         else :
-            print('patient {:02d} does not have mask files. Did not included.'.format(p.patient_id))
+            print('patient {:02d} does not have mask files.',
+                  'Did not included.'.format(p.patient_id))
 
-    return cts_all, lungs_mask_all, infects_mask_all
+    return (np.asarray(cts_all)/255, \
+            np.asarray(lungs_mask_all), \
+            np.asarray(infects_mask_all), \
+            p.image_size)
 
 
 class Iterator(object):
-    def __init__(self, 
-                 cts_all, 
-                 lungs_mask_all, 
-                 infects_mask_all,
-                 batch_size,
-                 shuffle=True,
-                 rotation_range=15,
-                 width_shift_range=0.2,
-                 height_shift_range=0.2,
-                 shear_range=0.1,
-                 zoom_range=0.01) :
+    def __init__(self, cts_all, masks_all, batch_size,
+                 shuffle=True, rotation_range=15,
+                 width_shift_range=0.2, height_shift_range=0.2,
+                 shear_range=0.1, zoom_range=0.01) :
 
         self.cts_all = cts_all
-        self.lungs_mask_all = lungs_mask_all
-        self.infects_mask_all = infects_mask_all
+        self.masks_all = masks_all
         self.batch_size = batch_size
         self.shuffle = shuffle
         augment_options = {
@@ -93,17 +81,15 @@ class Iterator(object):
         start = self.i
         end = min(start+self.batch_size, len(self.cts_all))
         augmented_cts = []
-        augmented_lungs_mask = []
-        augmented_infects_mask = []
+        augmented_masks = []
         for n in self.index[start:end]:
             ct = self.cts_all[n]
-            lung_mask = self.lungs_mask_all[n]
-            infect_mask = self.infects_mask_all[n]
+            mask = self.masks_all[n]
 
             _, _, channels = ct.shape
 
             # stack image + mask together to simultaneously augment
-            stacked = np.concatenate((ct, lung_mask, infect_mask), axis=2)
+            stacked = np.concatenate((ct, mask), axis=2)
 
             # apply simple affine transforms first using Keras
             augmented = self.img_generator.random_transform(stacked)
@@ -111,10 +97,8 @@ class Iterator(object):
             # split image and mask back apart
             image = augmented[:, :, :channels]
             augmented_cts.append(image)
-            image = np.round(augmented[:, :, channels:2*channels])
-            augmented_lungs_mask.append(image)
-            image = np.round(augmented[:, :, 2*channels:])
-            augmented_infects_mask.append(image)
+            image = np.round(augmented[:, :, channels:])
+            augmented_masks.append(image)
 
         self.i += self.batch_size
         if self.i >= len(self.cts_all):
@@ -122,12 +106,13 @@ class Iterator(object):
             if self.shuffle:
                 np.random.shuffle(self.index)
 
-        augmented_output = {'lung_output': np.asarray(augmented_lungs_mask), 
-                            'infect_output': np.asarray(augmented_infects_mask)}
-        return np.asarray(augmented_cts), augmented_output
+        augmented_cts = np.asarray(augmented_cts)
+        augmented_masks = np.asarray(augmented_masks)
+
+        return augmented_cts, augmented_masks
 
 
-def create_generators(data_dir, batch_size, validation_split=0.0, 
+def create_generators(data_dir, batch_size, img_data=[], validation_split=0.0, 
                       shuffle_train_val=True, shuffle=True, seed=None,
                       augment_training=True, augment_validation=True, 
                       augmentation_args={}):
@@ -136,6 +121,8 @@ def create_generators(data_dir, batch_size, validation_split=0.0,
     inputs:
         - data_dir: directory that contains patientXX folders
         - batch_size: batch size, int
+        - img_data: data of cts (channel 0) and lung or infection mask (channel 1). If
+          this data doesn't exist, load it from data_dir above.
         - validation_split: percentage of training data to hold out for validation, float
         - shuffle: shuffle data, boolean
         - augment_training: augment training data, boolean
@@ -144,49 +131,54 @@ def create_generators(data_dir, batch_size, validation_split=0.0,
         - train_generator: image data generator for training data
         - val_generator: image data generator for validation data
     """
-    cts_all, lungs_mask_all, infects_mask_all = load_images(data_dir)
+    if len(img_data) == 0 :
+        cts_all, lungs_mask_all, infects_mask_all, _ = load_images(data_dir)
 
-    if seed is not None:
-        np.random.seed(seed)
+        if seed is not None:
+            np.random.seed(seed)
 
-    if shuffle_train_val:
-        # shuffle images and masks in parallel
-        rng_state = np.random.get_state()
-        np.random.shuffle(cts_all)
-        np.random.set_state(rng_state)
-        np.random.shuffle(lungs_mask_all)
-        np.random.set_state(rng_state)
-        np.random.shuffle(infects_mask_all)
+        if shuffle_train_val:
+            # shuffle images and masks in parallel
+            rng_state = np.random.get_state()
+            np.random.shuffle(cts_all)
+            np.random.set_state(rng_state)
+            np.random.shuffle(lungs_mask_all)
+            np.random.set_state(rng_state)
+            np.random.shuffle(infects_mask_all)
+
+        # fuse masks together to pass to ImageDataGenerator
+        masks_all = np.concatenate((lungs_mask_all, infects_mask_all), axis=-1)
+    else :
+        print("Preparing mask images...")
+        if img_data.shape[-1] == 2 :
+            cts_all, masks_all = np.split(img_data, 2, axis=-1) 
+        elif img_data.shape[-1] == 3 :
+            cts_all, lungs_mask_all, infects_mask_all = np.split(img_data, 3, axis=-1) 
+            # fuse masks together to pass to ImageDataGenerator
+            masks_all = np.concatenate((lungs_mask_all, infects_mask_all), axis=-1)
+
 
     # split out last %(validation_split) of images as validation set
     split_index = int((1-validation_split) * len(cts_all))
 
     if augment_training:
-        train_generator = Iterator(cts_all[:split_index], lungs_mask_all[:split_index], 
-                                    infects_mask_all[:split_index], batch_size, 
-                                    shuffle=shuffle, **augmentation_args)
+        train_generator = Iterator(cts_all[:split_index], masks_all[:split_index], 
+                                    batch_size, shuffle=shuffle, **augmentation_args)
     else:
         img_generator = ImageDataGenerator()
-        train_generator = img_generator.flow(cts_all[:split_index], range(split_index), 
+        train_generator = img_generator.flow(cts_all[:split_index], masks_all[:split_index], 
                                                     batch_size=batch_size, shuffle=shuffle)
-        train_generator = make_multi_output_flow(train_generator[:split_index], 
-                                                 lungs_mask_all[:split_index], 
-                                                 infects_mask_all[:split_index])
 
     train_steps_per_epoch = ceil(split_index / batch_size)
 
     if validation_split > 0.0:
         if augment_validation:
-            val_generator = Iterator(cts_all[split_index:], lungs_mask_all[split_index:],
-                                     infects_mask_all[split_index:], batch_size, 
-                                     shuffle=shuffle, **augmentation_args)
+            val_generator = Iterator(cts_all[split_index:], masks_all[split_index:],
+                                     batch_size, shuffle=shuffle, **augmentation_args)
         else:
             img_generator = ImageDataGenerator()
-            val_generator = img_generator.flow(cts_all[split_index:], range(len(cts_all)-split_index), 
+            val_generator = img_generator.flow(cts_all[split_index:], masks_all[split_index:], 
                                                     batch_size=batch_size, shuffle=shuffle)
-            train_generator = make_multi_output_flow(train_generator[split_index:], 
-                                                     lungs_mask_all[split_index:], 
-                                                     infects_mask_all[split_index:])
     else:
         val_generator = None
 

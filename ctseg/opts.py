@@ -8,16 +8,15 @@ import logging
 definitions = [
     # model               type   default help
     ('model',            (str,   'convnet',          "Model: convnet")),
-    ('num_filters',      (list,  [32,128,128,256],   "Number of filters in convolutional layers.")),
+    ('lseg_filters',     (list,  [16,32,128],        "Number of filters in lung segmentation convolutional layers.")),
+    ('iseg_filters',     (list,  [32,64,64,128],     "Number of filters in infection segmentation convolutional layers.")),
     ('padding',          (str,   'same',             "Padding in convolutional layers. Either `same' or `valid'.")),
-    ('dropout',          (float,  0.25,              "Rate for dropout of activation units.")),
+    ('dropout',          (float,  0.20,              "Rate for dropout of activation units.")),
 
     # loss
     ('loss',             (str,   'bce_dice', "Loss function: `pixel' for pixel-wise cross entropy, `dice' for dice coefficient.")),
-    ('loss-weights',     {'type': float, 'nargs': '+', 'default': [0.5, 0.5],
+    ('loss_weights',     {'type': float, 'nargs': '+', 'default': [0.5, 0.5],
                           'help': "When using binary-cross-entropy loss"}),
-    ('output_weights',   {'type': float, 'nargs': '+', 'default': [0.5, 0.5],
-                          'help': "Relative contribution of two outputs (lung_output and infect_output)"}),
 
     # training
     ('epochs',           (int,   100,    "Number of epochs to train.")),
@@ -35,11 +34,12 @@ definitions = [
     ('seed',             (int,   42,   "Seed for numpy RandomState")),
 
     # files
-    ('datadir',          (str,   'training-set',       "Directory containing patientXX/ directories.")),
-    ('testdir',          (str,   'testing-set',        "Directory containing patientXX/ directories for testing.")),
+    ('datadir',          (str,   'testing-dir',       "Directory containing patientXX/ directories.")),
+    ('testdir',          (str,   'testing-dir',        "Directory containing patientXX/ directories for testing.")),
     ('outdir',           (str,   'outputs',            "Directory to write output data.")),
     ('indir',            (str,   '',                   "Directory that contain data.")),
-    ('outfile',          (str,   'weights-final.hdf5', "File to write final model weights.")),
+    ('lseg_outfile',     (str,   'lseg-weights-final.hdf5', "File to write final model weights.")),
+    ('iseg_outfile',     (str,   'iseg-weights-final.hdf5', "File to write final model weights.")),
     ('load-weights',     (str,   '',                   "Load model weights from specified file to initialize training.")),
     ('checkpoint',       {'default': True,             'action': 'store_true',
                           'help': "Write model weights after each epoch if validation accuracy improves."}),
