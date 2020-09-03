@@ -31,14 +31,14 @@ patient_data = patient.PatientData("testing-set/patient00")
 ```
 `PatientData` loads CT images which are used to train a convolutional network. Find out more details see ```how2useit/how2use-patient.py```.
 
-<a href="Sample Segmented Lungs"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-lungs.png" align="middle" height="300" ></a>
+<a href="Sample Segmented Lungs"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-lungs.png" align="middle" height="400" ></a>
 
-<a href="Sample Lung Mask"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/lung-mask-and-bbox.png" align="middle" height="200" ></a>
+<a href="Sample Lung Mask"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/lung-mask-and-bbox.png" align="middle" height="150" ></a>
 
 
 Using segmented lungs, CT image were cropped and fed into a convolutional network to train segmenting for infections (see `ctseg/models/convnet.py `). Models were trained and the outputs, including weights, were saved in the `outputs` folder. To explore the model performance see `scripts/evaluate.py`
 
-<a href="Sample Segmented Infections"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-infections.png" align="middle" height="300" ></a>
+<a href="Sample Segmented Infections"><img src="https://github.com/Mahmood-Hoseini/COVID19-CT-Scan-Segmentation/blob/master/outputs/segmented-infections.png" align="middle" height="400" ></a>
 
 
 To test the model on new patient data, fill out `testdir` in the `defaults.config` file and run
